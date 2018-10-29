@@ -1,6 +1,9 @@
 from database import cursor, db
-from .user import User
-from .points import Points
+import json
+
+########################################################################################################################
+########################################################################################################################
+# Points
 
 class Team:
     def __init__(self, id, name, date_created, date_updated):
@@ -12,44 +15,40 @@ class Team:
     def __repr__(self):
         return f"[ Id: {self.id}, Name: {self.name} ]"
 
-    def get_users(self):
-        cursor.execute("""SELECT * FROM users WHERE team_id = %s""", (self.id, ))
-        users = []
-        for row in cursor:
-            user = User.create_user(row)
-            users.append(user)
-        return users
+    @classmethod
+    def create_team_from_row(cls, row):
+        id, name, date_created, date_updated = row
+        return Team(id, name, date_created, date_updated)
 
-    def get_point_total(self):
-        cursor.execute("""SELECT SUM(points.points)
-                        FROM teams
-                        JOIN users ON teams.id = users.team_id
-                        JOIN points ON users.id = points.user_id
-                        WHERE teams.id = %s
-                        """, (self.id, ))
-
-        return cursor.fetchone()[0]
-
+    ####################################################################################################################
+    # GET
 
     @classmethod
     def get_all_teams(cls):
         teams = []
         cursor.execute("""SELECT * FROM teams""")
         for row in cursor:
-            team = Team.create_team(row)
+            team = Team.create_team_from_row(row)
             teams.append(team)
         return teams
-
-    @classmethod
-    def create_team(cls, row):
-        id, name, date_created, date_updated = row
-        return Team(id, name, date_created, date_updated)
 
     @classmethod
     def get_team(cls, id):
         cursor.execute("""SELECT * from teams WHERE id = %s""", (id, ))
         row = cursor.fetchone()
-        return Team.create_team(row)
+        return Team.create_team_from_row(row)
+
+    ####################################################################################################################
+    # INSERT
+
+    @classmethod
+    def insert_team_into_database(cls, name, date_created, date_updated):
+        cursor.execute("""INSERT INTO teams (name, date_created, date_updated)
+        VALUES (%s, %s, %s)""", (name, date_created, date_updated))
+        db.commit()
+
+    ####################################################################################################################
+    # UPDATE
 
     @classmethod
     def update_team(cls, id, attribute, value):
@@ -57,10 +56,54 @@ class Team:
         cursor.execute(query_string, (value, id,))
         db.commit()
 
+    ####################################################################################################################
+    # DELETE
+
     @classmethod
     def delete_team(cls, id):
         cursor.execute("""DELETE FROM teams where id = %s""", (id, ))
         db.commit()
+
+    ####################################################################################################################
+    # JSON CONVERSION
+
+    @classmethod
+    def get_all_teams_json(cls):
+        all_teams = Team.get_all_teams()
+        team_json = {
+            'results': [
+
+            ]
+        }
+        for team in all_teams:
+            team_data = Team.get_team_dict(team)
+            team_json['results'].append(team_data)
+        team_json = json.dumps(team_json)
+        return team_json
+
+    @classmethod
+    def get_team_json(cls, id):
+        team = Team.get_team(id)
+        team_data = Team.get_team_dict(team)
+        team_json = json.dumps(team_data)
+        return team_json
+
+    @classmethod
+    def get_team_dict(cls, team):
+        team_data = {
+            'id': team.id,
+            'name': team.name,
+            'date_created': team.date_created.isoformat(),
+            'date_updated': team.date_updated.isoformat(),
+        }
+        return team_data
+
+    @classmethod
+    def create_team_from_json(cls, team_json):
+        name = team_json['name']
+        date_created = team_json['date_created']
+        date_updated = team_json['date_updated']
+        Team.insert_team_into_database(name, date_created, date_updated)
 
 
 if __name__ == "__main__":
